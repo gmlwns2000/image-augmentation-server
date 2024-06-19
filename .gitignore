@@ -57,3 +57,5 @@ processed.png
 torchhub
 __pycache__/
 *.pyc
+GroundingDINO/
+weights/

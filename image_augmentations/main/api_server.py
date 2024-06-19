@@ -60,7 +60,7 @@ class SegAnythingProvider(ImageAugmentationProvider):
         self.lock = asyncio.Lock()
         try:
             self.load_model()
-        except ImportError as ex:
+        except (ModuleNotFoundError, ImportError) as ex:
             logger.error(ex)
             self.install()
             self.load_model()
@@ -127,7 +127,7 @@ class DepthAnythingProvider(ImageAugmentationProvider):
         self.lock = asyncio.Lock()
         try:
             self.load_model()
-        except ImportError as ex:
+        except (ModuleNotFoundError, ImportError) as ex:
             logger.error(ex)
             self.install()
             self.load_model()
@@ -191,12 +191,90 @@ class DepthAnythingProvider(ImageAugmentationProvider):
             
             return image
 
+class GroundingDINOProvider(ImageAugmentationProvider):
+    def __init__(self):
+        self.device = 0
+        self.lock = asyncio.Lock()
+        try:
+            self.load_model()
+        except (ModuleNotFoundError, ImportError) as ex:
+            logger.error(ex)
+            self.install()
+            self.load_model()
+    
+    def load_model(self):
+        from groundingdino.util.inference import load_model, load_image, predict, annotate
+        import groundingdino.datasets.transforms as T
+
+        self.model = load_model("GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py", "weights/groundingdino_swint_ogc.pth")
+        self.IMAGE_PATH = "weights/dog-3.jpeg"
+        self.TEXT_PROMPT = "chair . person . dog ."
+        self.BOX_TRESHOLD = 0.35
+        self.TEXT_TRESHOLD = 0.25
+        
+        self.predict = predict
+        self.annotate = annotate
+        
+        self.transform = T.Compose(
+            [
+                T.RandomResize([800], max_size=1333),
+                T.ToTensor(),
+                T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
+    
+    def install(self):
+        MSG = """
+        Installation:
+
+        1.Clone the GroundingDINO repository from GitHub.
+        ```
+            git clone https://github.com/IDEA-Research/GroundingDINO.git
+            cd GroundingDINO/
+            pip install -e .
+        ```
+        
+        2.Download pre-trained model weights.
+        ```
+            mkdir weights
+            cd weights
+            wget -q https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
+            cd .. 
+        ```
+        """
+        print(MSG)
+        input('After install, press enter >>>')
+        
+        assert os.path.exists("GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+        assert os.path.exists("weights/groundingdino_swint_ogc.pth")
+    
+    async def __call__(self, image: Image.Image) -> Dict | Image.Image:
+        image_source = np.asarray(image.convert('RGB'))
+        
+        image_transformed, _ = self.transform(image.convert('RGB'), None)
+
+        boxes, logits, phrases = self.predict(
+            model=self.model,
+            image=image_transformed,
+            caption=self.TEXT_PROMPT,
+            box_threshold=self.BOX_TRESHOLD,
+            text_threshold=self.TEXT_TRESHOLD
+        )
+
+        annotated_frame = self.annotate(image_source=image_source, boxes=boxes, logits=logits, phrases=phrases)
+        annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+        
+        image = Image.fromarray(annotated_frame)
+        
+        return image
+
 class ImageAugmentationService:
     def __init__(self):
         self.providers = {
             ImageAugmentationType.LOW_LIGHT: LowLightProvider(),
             # ImageAugmentationType.SEMA_SEG: SegAnythingProvider(),
-            ImageAugmentationType.DEPTH_EST: DepthAnythingProvider(),
+            # ImageAugmentationType.DEPTH_EST: DepthAnythingProvider(),
+            ImageAugmentationType.OBJ_DETECT: GroundingDINOProvider(),
         }
     
     async def augmentation(self, img: Image.Image, type: ImageAugmentationType):
