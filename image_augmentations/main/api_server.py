@@ -249,24 +249,25 @@ class GroundingDINOProvider(ImageAugmentationProvider):
         assert os.path.exists("weights/groundingdino_swint_ogc.pth")
     
     async def __call__(self, image: Image.Image) -> Dict | Image.Image:
-        image_source = np.asarray(image.convert('RGB'))
-        
-        image_transformed, _ = self.transform(image.convert('RGB'), None)
+        async with self.lock:
+            image_source = np.asarray(image.convert('RGB'))
+            
+            image_transformed, _ = self.transform(image.convert('RGB'), None)
 
-        boxes, logits, phrases = self.predict(
-            model=self.model,
-            image=image_transformed,
-            caption=self.TEXT_PROMPT,
-            box_threshold=self.BOX_TRESHOLD,
-            text_threshold=self.TEXT_TRESHOLD
-        )
+            boxes, logits, phrases = self.predict(
+                model=self.model,
+                image=image_transformed,
+                caption=self.TEXT_PROMPT,
+                box_threshold=self.BOX_TRESHOLD,
+                text_threshold=self.TEXT_TRESHOLD
+            )
 
-        annotated_frame = self.annotate(image_source=image_source, boxes=boxes, logits=logits, phrases=phrases)
-        annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-        
-        image = Image.fromarray(annotated_frame)
-        
-        return image
+            annotated_frame = self.annotate(image_source=image_source, boxes=boxes, logits=logits, phrases=phrases)
+            annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+            
+            image = Image.fromarray(annotated_frame)
+            
+            return image
 
 class ImageAugmentationService:
     def __init__(self):
