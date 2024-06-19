@@ -272,8 +272,8 @@ class ImageAugmentationService:
     def __init__(self):
         self.providers = {
             ImageAugmentationType.LOW_LIGHT: LowLightProvider(),
-            # ImageAugmentationType.SEMA_SEG: SegAnythingProvider(),
-            # ImageAugmentationType.DEPTH_EST: DepthAnythingProvider(),
+            ImageAugmentationType.SEMA_SEG: SegAnythingProvider(),
+            ImageAugmentationType.DEPTH_EST: DepthAnythingProvider(),
             ImageAugmentationType.OBJ_DETECT: GroundingDINOProvider(),
         }
     
